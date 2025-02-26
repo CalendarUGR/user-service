@@ -1,15 +1,26 @@
 package com.calendarugr.user_service.services;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageBuilder;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.calendarugr.user_service.PasswordUtil;
+import com.calendarugr.user_service.RabbitMQConfig;
 import com.calendarugr.user_service.entities.Role;
+import com.calendarugr.user_service.entities.TemporaryToken;
 import com.calendarugr.user_service.entities.User;
 import com.calendarugr.user_service.repositories.RoleRepository;
+import com.calendarugr.user_service.repositories.TemporaryTokenRepository;
 import com.calendarugr.user_service.repositories.UserRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
@@ -23,6 +34,12 @@ public class UserService {
 
     @Autowired 
     private RoleRepository roleRepository;
+
+    @Autowired
+    private TemporaryTokenRepository temporaryTokenRepository;
+
+    @Autowired
+    private RabbitTemplate rabbitTemplate;
 
     public Optional<User> findByNickname(String nickname) {
         return userRepository.findByNickname(nickname);
@@ -40,11 +57,99 @@ public class UserService {
         return userRepository.findById(id);
     }
 
-    // Register User
+    //  The method to register a user if you are not an admin
+    @Transactional
+    public User registerUser(User user) {
+        Optional<Role> roleOptional = roleRepository.findByName("ROLE_INACTIVE");
+        if (roleOptional.isPresent()) {
+            user.setRole(roleOptional.get());
+        }
+        user.setPassword(PasswordUtil.encryptPassword(user.getPassword()));
+        User toReturn = userRepository.save(user);
+        // Generate an activation token for the email and save it in the database
+        String token = UUID.randomUUID().toString();
+        TemporaryToken temporaryToken = new TemporaryToken();
+        temporaryToken.setToken(token);
+        temporaryToken.setNickname(user.getNickname());
+        temporaryToken.setUser(user);
 
-    // Activate User
+        temporaryTokenRepository.save(temporaryToken);
 
-    // Deactivate User
+        // Send email to user through RabbitMQ
+        Map<String, String> message = new HashMap<>();
+        message.put("email", user.getEmail());
+        message.put("token", token);
+
+        try {
+            // Convert map to json
+            ObjectMapper objectMapper = new ObjectMapper();
+            String json = objectMapper.writeValueAsString(message);
+
+            // Send message
+            Message msg = MessageBuilder.withBody(json.getBytes())
+                .setContentType("application/json")
+                .build();
+
+            rabbitTemplate.convertAndSend(RabbitMQConfig.MAIL_EXCHANGE, RabbitMQConfig.MAIL_ROUTING_KEY, msg);
+
+        } catch (JsonProcessingException e) {
+            // Manejar la excepción aquí
+            e.printStackTrace();
+            throw new RuntimeException("Error processing JSON", e);
+        }
+
+        return toReturn;
+    }
+
+    @Transactional
+    public Optional<User> activateUser(String token) {
+        Optional<TemporaryToken> temporaryToken = temporaryTokenRepository.findByToken(token);
+        if (temporaryToken.isPresent()) {
+            Optional<User> user = userRepository.findByNickname(temporaryToken.get().getNickname());
+            if (user.isPresent()) {
+                user.get().setRole(checkRoleUGR(user.get()));
+                userRepository.save(user.get());
+                temporaryTokenRepository.delete(temporaryToken.get());
+                return user;
+            }else{
+                return Optional.empty();
+            }
+        }else{
+            return Optional.empty();
+        }
+    }
+
+    @Transactional
+    public Optional<User> deactivateUser(Long id){
+        Optional<User> user = userRepository.findById(id);
+        if (user.isPresent()) {
+            user.get().setRole(roleRepository.findByName("ROLE_INACTIVE").get());
+            userRepository.save(user.get());
+            return user;
+        }else{
+            return Optional.empty();
+        }
+    }
+
+    @Transactional 
+    public User updateNickname(Long id, User user) {
+        if (user.getNickname() == null) {
+            throw new ConstraintViolationException("Nickname cannot be null", null);
+        }
+        if (userRepository.findByNickname(user.getNickname()).isPresent()) {
+            throw new ConstraintViolationException("Nickname already exists", null);
+        }
+        Optional<User> userOptional = userRepository.findById(id);
+
+        if (userOptional.isPresent()) {
+            User userToUpdate = userOptional.get();
+            userToUpdate.setNickname(user.getNickname());
+            return userRepository.save(userToUpdate);
+        }
+        return null;
+    }
+
+    // ADMIN Endpoints
 
     @Transactional // This is a method only for the admin
     public User save(User user) {
@@ -94,24 +199,6 @@ public class UserService {
                 }
             }
             
-            return userRepository.save(userToUpdate);
-        }
-        return null;
-    }
-
-    @Transactional 
-    public User updateNickname(Long id, User user) {
-        if (user.getNickname() == null) {
-            throw new ConstraintViolationException("Nickname cannot be null", null);
-        }
-        if (userRepository.findByNickname(user.getNickname()).isPresent()) {
-            throw new ConstraintViolationException("Nickname already exists", null);
-        }
-        Optional<User> userOptional = userRepository.findById(id);
-
-        if (userOptional.isPresent()) {
-            User userToUpdate = userOptional.get();
-            userToUpdate.setNickname(user.getNickname());
             return userRepository.save(userToUpdate);
         }
         return null;
