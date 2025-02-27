@@ -11,8 +11,8 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import com.calendarugr.user_service.PasswordUtil;
-import com.calendarugr.user_service.RabbitMQConfig;
+import com.calendarugr.user_service.config.PasswordUtil;
+import com.calendarugr.user_service.config.RabbitMQConfig;
 import com.calendarugr.user_service.entities.Role;
 import com.calendarugr.user_service.entities.TemporaryToken;
 import com.calendarugr.user_service.entities.User;
@@ -147,6 +147,23 @@ public class UserService {
             return userRepository.save(userToUpdate);
         }
         return null;
+    }
+
+    // This method is only used by "TEACHER" or "ADMIN" roles ( set in the API Gateway )
+    @Transactional
+    public Optional<User> changeRole(Long id){
+        Optional<User> userOptional = userRepository.findById(id);
+        if (userOptional.isPresent()) {
+            User user = userOptional.get();
+            if (user.getRole().getName().equals("ROLE_TEACHER")) {
+                user.setRole(roleRepository.findByName("ROLE_ADMIN").get());
+            }else if (user.getRole().getName().equals("ROLE_ADMIN")) {
+                user.setRole(roleRepository.findByName("ROLE_TEACHER").get());
+            }
+            return Optional.of(userRepository.save(user));
+        }else{
+            return Optional.empty();
+        }
     }
 
     // ADMIN Endpoints

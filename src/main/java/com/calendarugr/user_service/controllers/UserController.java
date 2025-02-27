@@ -11,13 +11,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.calendarugr.user_service.entities.User;
 import com.calendarugr.user_service.services.UserService;
-import com.rabbitmq.client.RpcClient.Response;
 
 import jakarta.validation.Valid;
 
@@ -28,37 +28,38 @@ public class UserController {
     @Autowired
     private UserService userService;
 
+    // Auxiliary method to check if the user is not trying to modify another user's data
+    private ResponseEntity<String> authenticateRequest(Long userId, String userIdHeader, String userRoleHeader) {
+        System.out.println("User ID: " + userId + " User ID Header: " + userIdHeader + " User Role Header: " + userRoleHeader);
+        if (!userId.equals(Long.parseLong(userIdHeader)) && !userRoleHeader.equals("ROLE_ADMIN")) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Forbidden");
+        }
+        return null; // Null means the request is authenticated
+    }
+
     @GetMapping("/all")
     public ResponseEntity<Iterable<User>> getAllUsers() {
         return ResponseEntity.ok(userService.findAll());
     }
 
     @GetMapping("nickname/{nickname}")
-    public ResponseEntity<User> getUserByNickname(@PathVariable String nickname) {
+    public ResponseEntity<?> getUserByNickname(@PathVariable String nickname) {
         Optional<User> user = userService.findByNickname(nickname);
         if (!user.isPresent()) {
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
         }else{
             return new ResponseEntity<>(user.get(), HttpStatus.OK);
         }
     }
 
     @GetMapping("/email/{email}")
-    public ResponseEntity<User> getUserByEmail(@PathVariable String email) {
+    public ResponseEntity<?> getUserByEmail(@PathVariable String email) {
         Optional<User> user = userService.findByEmail(email);
         if (!user.isPresent()) {
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
         }else{
             return new ResponseEntity<>(user.get(), HttpStatus.OK);
         }
-    }
-
-    @PutMapping("/updateNickname/{id}")
-    public ResponseEntity<User> updateNickname(@PathVariable Long id, @RequestBody User user) {
-        if (!userService.findById(id).isPresent()) {
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-        }
-        return ResponseEntity.ok(userService.updateNickname(id, user));
     }
 
     @PostMapping("/register")
@@ -87,11 +88,11 @@ public class UserController {
     }
 
     @GetMapping("/activate")
-    public ResponseEntity<User> activateUser(@RequestParam String token){
-        System.out.println("Token: " + token);
+    public ResponseEntity<?> activateUser(@RequestParam String token){
+        
         Optional<User> user = userService.activateUser(token);
         if (!user.isPresent()) {
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
         }else{
             //TODO: Redirect to login page
             return new ResponseEntity<>(user.get(), HttpStatus.OK);
@@ -99,37 +100,85 @@ public class UserController {
     }
 
     @GetMapping("/deactivate")
-    public ResponseEntity<User> deactivateUser(@RequestParam Long id){
+    public ResponseEntity<?> deactivateUser(@RequestParam Long id, 
+                                            @RequestHeader("X-User-ID") String userIdHeader,
+                                            @RequestHeader("X-User-Role") String userRoleHeader){
+
+        ResponseEntity<String> authResponse = authenticateRequest(id,userIdHeader,userRoleHeader);
+
+        if (authResponse != null) {
+            return authResponse;
+        }
+
         Optional<User> user = userService.deactivateUser(id);
         if (!user.isPresent()) {
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+
         }else{
             return new ResponseEntity<>(user.get(), HttpStatus.OK);
         }
     }
 
+    @PutMapping("/updateNickname/{id}")
+    public ResponseEntity<?> updateNickname(@PathVariable Long id, @RequestBody User user,
+                                            @RequestHeader("X-User-ID") String userIdHeader,
+                                            @RequestHeader("X-User-Role") String userRoleHeader){
+
+        ResponseEntity<String> authResponse = authenticateRequest(id ,userIdHeader,userRoleHeader);
+
+        if (authResponse != null) {
+            return authResponse;
+        }
+        
+        if (!userService.findById(id).isPresent()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+        }
+        return ResponseEntity.ok(userService.updateNickname(id, user));
+    }
+
+    @GetMapping("/changeRole/{id}")
+    public ResponseEntity<?> changeRole(@PathVariable Long id,
+                                        @RequestHeader("X-User-ID") String userIdHeader,
+                                        @RequestHeader("X-User-Role") String userRoleHeader){
+
+        ResponseEntity<String> authResponse = authenticateRequest(id ,userIdHeader,userRoleHeader);
+
+        if (authResponse != null) {
+            return authResponse;
+        }
+        
+        Optional<User> user = userService.changeRole(id);
+        if (!user.isPresent()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+        }else{
+            return new ResponseEntity<>(user.get(), HttpStatus.OK);
+        }
+    }
+
+
+
     // ADMIN Endpoints
 
-    @PostMapping
-    public ResponseEntity<User> createUser(@RequestBody User user) {
+    @PostMapping("/crearAdmin")
+    public ResponseEntity<?> createUser(@RequestBody User user) {
         if (userService.findByNickname(user.getNickname()).isPresent() || userService.findByEmail(user.getEmail()).isPresent()) {
-            return new ResponseEntity<>(HttpStatus.CONFLICT);
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("User already exists");
         }
         return ResponseEntity.ok(userService.save(user));
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<User> updateUser(@PathVariable Long id, @RequestBody User user) {
+    @PutMapping("actualizarAdmin/{id}")
+    public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody User user) {
         if (!userService.findById(id).isPresent()) {
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
         }
         return ResponseEntity.ok(userService.update(id, user));
     }
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
+    @DeleteMapping("borrarAdmin/{id}")
+    public ResponseEntity<?> deleteUser(@PathVariable Long id) {
         if (!userService.findById(id).isPresent()) {
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
         }
         userService.deleteById(id);
         return ResponseEntity.noContent().build();

@@ -1,4 +1,4 @@
-package com.calendarugr.user_service;
+package com.calendarugr.user_service.config;
 
 import org.apache.commons.codec.digest.DigestUtils;
 
