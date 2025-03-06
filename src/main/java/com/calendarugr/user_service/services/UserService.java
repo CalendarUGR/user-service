@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import com.calendarugr.user_service.config.PasswordUtil;
 import com.calendarugr.user_service.config.RabbitMQConfig;
+import com.calendarugr.user_service.dtos.ChangePasswordRequest;
 import com.calendarugr.user_service.entities.Role;
 import com.calendarugr.user_service.entities.TemporaryToken;
 import com.calendarugr.user_service.entities.User;
@@ -120,12 +121,16 @@ public class UserService {
     }
 
     @Transactional
-    public Optional<User> deactivateUser(Long id){
+    public Optional<User> deactivateUser(Long id, String currentPassword){
         Optional<User> user = userRepository.findById(id);
         if (user.isPresent()) {
-            user.get().setRole(roleRepository.findByName("ROLE_INACTIVE").get());
-            userRepository.save(user.get());
-            return user;
+            if (PasswordUtil.matches(currentPassword, user.get().getPassword())) {
+                user.get().setRole(roleRepository.findByName("ROLE_INACTIVE").get());
+                userRepository.save(user.get());
+                return user;
+            }else{
+                return Optional.empty();
+            }
         }else{
             return Optional.empty();
         }
@@ -159,8 +164,26 @@ public class UserService {
                 user.setRole(roleRepository.findByName("ROLE_ADMIN").get());
             }else if (user.getRole().getName().equals("ROLE_ADMIN")) {
                 user.setRole(roleRepository.findByName("ROLE_TEACHER").get());
+            }else{
+                return Optional.empty();
             }
             return Optional.of(userRepository.save(user));
+        }else{
+            return Optional.empty();
+        }
+    }
+
+    @Transactional
+    public Optional<User> changePassword(Long id, ChangePasswordRequest changePasswordRequest) {
+        Optional<User> userOptional = userRepository.findById(id);
+        if (userOptional.isPresent()) {
+            User user = userOptional.get();
+            if (PasswordUtil.matches(changePasswordRequest.getCurrentPassword(), user.getPassword())) {
+                user.setPassword(PasswordUtil.encryptPassword(changePasswordRequest.getNewPassword()));
+                return Optional.of(userRepository.save(user));
+            }else{
+                return Optional.empty();
+            }
         }else{
             return Optional.empty();
         }

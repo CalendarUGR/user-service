@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.calendarugr.user_service.dtos.ChangePasswordRequest;
 import com.calendarugr.user_service.entities.User;
 import com.calendarugr.user_service.services.UserService;
 
@@ -99,8 +100,8 @@ public class UserController {
         }
     }
 
-    @GetMapping("/deactivate")
-    public ResponseEntity<?> deactivateUser(@RequestParam Long id, 
+    @PostMapping("/deactivate/{id}")
+    public ResponseEntity<?> deactivateUser(@PathVariable Long id, @RequestBody ChangePasswordRequest changePasswordRequest,
                                             @RequestHeader("X-User-ID") String userIdHeader,
                                             @RequestHeader("X-User-Role") String userRoleHeader){
 
@@ -110,7 +111,7 @@ public class UserController {
             return authResponse;
         }
 
-        Optional<User> user = userService.deactivateUser(id);
+        Optional<User> user = userService.deactivateUser(id, changePasswordRequest.getCurrentPassword());
         if (!user.isPresent()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
 
@@ -155,7 +156,29 @@ public class UserController {
         }
     }
 
+    @PutMapping("/changePassword/{id}")
+    public ResponseEntity<?> changePassword(@PathVariable Long id, @RequestBody ChangePasswordRequest changePasswordRequest,
+                                            @RequestHeader("X-User-ID") String userIdHeader,
+                                            @RequestHeader("X-User-Role") String userRoleHeader){
 
+        ResponseEntity<String> authResponse = authenticateRequest(id ,userIdHeader,userRoleHeader);
+
+        if (authResponse != null) {
+            return authResponse;
+        }
+
+        String passRegex = "^(?=.*[A-Z])(?=.*[0-9]).{9,}$"; 
+        if (!changePasswordRequest.getNewPassword().matches(passRegex)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Password must contain at least 9 characters, one uppercase letter and one number");   
+        }
+        
+        Optional<User> user = userService.changePassword(id, changePasswordRequest);
+        if (!user.isPresent()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+        }else{
+            return new ResponseEntity<>(user.get(), HttpStatus.OK);
+        }
+    }
 
     // ADMIN Endpoints
 

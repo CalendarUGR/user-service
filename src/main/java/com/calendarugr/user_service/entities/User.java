@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -25,18 +26,22 @@ public class User{
     private Long id;
 
     @NotNull
-    @Column(unique = true)
+    @Size(max = 50)
+    @Column(unique = true, length = 50)
     private String nickname;
 
     @NotNull
-    @Column(unique = true)
+    @Size(max = 100)
+    @Column(unique = true, length = 100)
     private String email;
 
     @NotNull
+    @Size(max = 255)
+    @Column(length = 255)
     private String password;
 
     @ManyToOne
-    @JoinColumn(name= "role, nullable = false)")
+    @JoinColumn(name= "role", nullable = false)
     private Role role;
 
 }
