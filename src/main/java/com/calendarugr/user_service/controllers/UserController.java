@@ -33,7 +33,7 @@ public class UserController {
     private ResponseEntity<String> authenticateRequest(Long userId, String userIdHeader, String userRoleHeader) {
         System.out.println("User ID: " + userId + " User ID Header: " + userIdHeader + " User Role Header: " + userRoleHeader);
         if (!userId.equals(Long.parseLong(userIdHeader)) && !userRoleHeader.equals("ROLE_ADMIN")) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Forbidden");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("No está autorizado para modificar este usuario");
         }
         return null; // Null means the request is authenticated
     }
@@ -47,7 +47,7 @@ public class UserController {
     public ResponseEntity<?> getUserByNickname(@PathVariable String nickname) {
         Optional<User> user = userService.findByNickname(nickname);
         if (!user.isPresent()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
         }else{
             return new ResponseEntity<>(user.get(), HttpStatus.OK);
         }
@@ -57,7 +57,7 @@ public class UserController {
     public ResponseEntity<?> getUserByEmail(@PathVariable String email) {
         Optional<User> user = userService.findByEmail(email);
         if (!user.isPresent()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
         }else{
             return new ResponseEntity<>(user.get(), HttpStatus.OK);
         }
@@ -67,20 +67,20 @@ public class UserController {
     public ResponseEntity<?> registerUser(@Valid @RequestBody User user) {
         if (user == null) {
             //return new ResponseEntity<>("User data is missing", HttpStatus.BAD_REQUEST);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("User data is missing");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("La información del usuario está incompleta");
         }
 
         if (userService.findByNickname(user.getNickname()).isPresent() || userService.findByEmail(user.getEmail()).isPresent()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body("User already exists");
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("El usuario ya existe");
         }
 
         String passRegex = "^(?=.*[A-Z])(?=.*[0-9]).{9,}$"; 
         if (!user.getPassword().matches(passRegex)) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Password must contain at least 9 characters, one uppercase letter and one number");   
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("La contraseña debe contener al menos 9 caracteres, una letra mayúscula y un número");  
         }
         System.out.println("Email: " + user.getEmail()+ " ends with ugr.es: " + user.getEmail().endsWith("@ugr.es")+ " ends with correo.ugr.es: " + user.getEmail().endsWith("@correo.ugr.es"));
         if (!user.getEmail().endsWith("@ugr.es") && !user.getEmail().endsWith("@correo.ugr.es")) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Email must be from UGR domain");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("EL correo electrónico debe terminar en @ugr.es o @correo.ugr.es");
         }
 
         User savedUser = userService.registerUser(user);
@@ -93,7 +93,7 @@ public class UserController {
         
         Optional<User> user = userService.activateUser(token);
         if (!user.isPresent()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
         }else{
             //TODO: Redirect to login page
             return new ResponseEntity<>(user.get(), HttpStatus.OK);
@@ -113,7 +113,7 @@ public class UserController {
 
         Optional<User> user = userService.deactivateUser(id, changePasswordRequest.getCurrentPassword());
         if (!user.isPresent()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
 
         }else{
             return new ResponseEntity<>(user.get(), HttpStatus.OK);
@@ -132,7 +132,7 @@ public class UserController {
         }
         
         if (!userService.findById(id).isPresent()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
         }
         return ResponseEntity.ok(userService.updateNickname(id, user));
     }
@@ -150,7 +150,7 @@ public class UserController {
         
         Optional<User> user = userService.changeRole(id);
         if (!user.isPresent()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
         }else{
             return new ResponseEntity<>(user.get(), HttpStatus.OK);
         }
@@ -169,7 +169,7 @@ public class UserController {
 
         String passRegex = "^(?=.*[A-Z])(?=.*[0-9]).{9,}$"; 
         if (!changePasswordRequest.getNewPassword().matches(passRegex)) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Password must contain at least 9 characters, one uppercase letter and one number");   
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("La contraseña debe contener al menos 9 caracteres, una letra mayúscula y un número");   
         }
         
         Optional<User> user = userService.changePassword(id, changePasswordRequest);
@@ -185,7 +185,7 @@ public class UserController {
     @PostMapping("/crearAdmin")
     public ResponseEntity<?> createUser(@RequestBody User user) {
         if (userService.findByNickname(user.getNickname()).isPresent() || userService.findByEmail(user.getEmail()).isPresent()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body("User already exists");
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("El usuario ya existe");
         }
         return ResponseEntity.ok(userService.save(user));
     }
@@ -193,7 +193,7 @@ public class UserController {
     @PutMapping("actualizarAdmin/{id}")
     public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody User user) {
         if (!userService.findById(id).isPresent()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
         }
         return ResponseEntity.ok(userService.update(id, user));
     }
@@ -201,7 +201,7 @@ public class UserController {
     @DeleteMapping("borrarAdmin/{id}")
     public ResponseEntity<?> deleteUser(@PathVariable Long id) {
         if (!userService.findById(id).isPresent()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
         }
         userService.deleteById(id);
         return ResponseEntity.noContent().build();
