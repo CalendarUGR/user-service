@@ -1,4 +1,4 @@
-package com.calendarugr.user_service;
+package com.calendarugr.user_service.config;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
