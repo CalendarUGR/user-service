@@ -44,4 +44,7 @@ public class User{
     @JoinColumn(name= "role", nullable = false)
     private Role role;
 
+    @NotNull
+    @Column(nullable = false)
+    private Boolean notification = false;
 }

@@ -1,6 +1,7 @@
 package com.calendarugr.user_service.services;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -13,7 +14,7 @@ import org.springframework.stereotype.Service;
 
 import com.calendarugr.user_service.config.PasswordUtil;
 import com.calendarugr.user_service.config.RabbitMQConfig;
-import com.calendarugr.user_service.dtos.ChangePasswordRequest;
+import com.calendarugr.user_service.dtos.ChangePasswordRequestDTO;
 import com.calendarugr.user_service.entities.Role;
 import com.calendarugr.user_service.entities.TemporaryToken;
 import com.calendarugr.user_service.entities.User;
@@ -47,10 +48,10 @@ public class UserService {
     }
 
     public Optional<User> findByEmail(String email) {
-        return userRepository.findByEmail(email);
+        return userRepository.findByEmail(email); 
     }
 
-    public Iterable<User> findAll() {
+    public List<User> findAll() {
         return userRepository.findAll();
     }
 
@@ -139,10 +140,10 @@ public class UserService {
     @Transactional 
     public User updateNickname(Long id, User user) {
         if (user.getNickname() == null) {
-            throw new ConstraintViolationException("Nickname cannot be null", null);
+            throw new ConstraintViolationException("El nickname ya existe", null);
         }
         if (userRepository.findByNickname(user.getNickname()).isPresent()) {
-            throw new ConstraintViolationException("Nickname already exists", null);
+            throw new ConstraintViolationException("El nickname ya existe", null);
         }
         Optional<User> userOptional = userRepository.findById(id);
 
@@ -174,7 +175,7 @@ public class UserService {
     }
 
     @Transactional
-    public Optional<User> changePassword(Long id, ChangePasswordRequest changePasswordRequest) {
+    public Optional<User> changePassword(Long id, ChangePasswordRequestDTO changePasswordRequest) {
         Optional<User> userOptional = userRepository.findById(id);
         if (userOptional.isPresent()) {
             User user = userOptional.get();
@@ -189,26 +190,61 @@ public class UserService {
         }
     }
 
+    @Transactional
+    public Optional<User> activateNotifications(Long id) {
+        
+        Optional<User> userOptional = userRepository.findById(id);
+        if (userOptional.isPresent()) {
+            User user = userOptional.get();
+            user.setNotification(true);
+            return Optional.of(userRepository.save(user));
+        }else{
+            return Optional.empty();
+        }
+
+    }
+
+    @Transactional
+    public Optional<User> deactivateNotifications(Long id) {
+        Optional<User> userOptional = userRepository.findById(id);
+        if (userOptional.isPresent()) {
+            User user = userOptional.get();
+            user.setNotification(false);
+            return Optional.of(userRepository.save(user));
+        }else{
+            return Optional.empty();
+        }
+    }
+
+    public List<String> getEmailsWhereNotifications(List<Long> ids) {
+        
+        List<User> users = userRepository.findAllByIdAndNotificationTrue(ids);
+        List<String> emails = users.stream().map(User::getEmail).toList();
+        System.out.println("Emails: " + emails);
+        return emails;
+    }
+
+
     // ADMIN Endpoints
 
     @Transactional // This is a method only for the admin
     public User save(User user) {
         if (!checkUGREmail(user)){
-            throw new IllegalArgumentException("Only UGR emails are allowed");
+            throw new IllegalArgumentException("Sólo se permiten correos de la UGR");
         }
         if (user.getRole() == null) {
             Optional<Role> roleOptional = roleRepository.findByName("ROLE_INACTIVE");
             if (roleOptional.isPresent()) {
                 user.setRole(roleOptional.get());
             }else{
-                throw new EntityNotFoundException("Role inactive not found when creating user");
+                throw new EntityNotFoundException("El Rol inactive no existe");
             }
         }else{
             Optional<Role> roleOptional = roleRepository.findByName(user.getRole().getName());
             if (roleOptional.isPresent()) {
                 user.setRole(roleOptional.get());
             }else{
-                throw new EntityNotFoundException("Role not found when creating user");
+                throw new EntityNotFoundException("El Rol no existe");
             }
         }
         // Encrypt password
@@ -235,7 +271,7 @@ public class UserService {
                 if (roleOptional.isPresent()) {
                     userToUpdate.setRole(roleOptional.get());
                 }else{
-                    throw new ConstraintViolationException("Role not found", null);
+                    throw new ConstraintViolationException("Rol no encontrado", null);
                 }
             }
             

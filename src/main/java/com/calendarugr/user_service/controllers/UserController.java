@@ -1,5 +1,6 @@
 package com.calendarugr.user_service.controllers;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,8 +17,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.calendarugr.user_service.dtos.ChangePasswordRequest;
+import com.calendarugr.user_service.dtos.ChangePasswordRequestDTO;
+import com.calendarugr.user_service.dtos.UserDTO;
 import com.calendarugr.user_service.entities.User;
+import com.calendarugr.user_service.mappers.UserMapper;
 import com.calendarugr.user_service.services.UserService;
 
 import jakarta.validation.Valid;
@@ -39,8 +42,10 @@ public class UserController {
     }
 
     @GetMapping("/all")
-    public ResponseEntity<Iterable<User>> getAllUsers() {
-        return ResponseEntity.ok(userService.findAll());
+    public ResponseEntity<List<UserDTO>> getAllUsers() {
+        List<User> users = userService.findAll();
+        List<UserDTO> userDTOs = UserMapper.toDTOList(users);
+        return ResponseEntity.ok(userDTOs);
     }
 
     @GetMapping("nickname/{nickname}")
@@ -49,11 +54,12 @@ public class UserController {
         if (!user.isPresent()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
         }else{
-            return new ResponseEntity<>(user.get(), HttpStatus.OK);
+            UserDTO userDTO = UserMapper.toDTO(user.get());
+            return new ResponseEntity<>(userDTO, HttpStatus.OK);
         }
     }
 
-    @GetMapping("/email/{email}")
+    @GetMapping("/email/{email}") // Here I dont use the DTO because I need the user entity to check extra info in auth service
     public ResponseEntity<?> getUserByEmail(@PathVariable String email) {
         Optional<User> user = userService.findByEmail(email);
         if (!user.isPresent()) {
@@ -66,42 +72,47 @@ public class UserController {
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@Valid @RequestBody User user) {
         if (user == null) {
-            //return new ResponseEntity<>("User data is missing", HttpStatus.BAD_REQUEST);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("La información del usuario está incompleta");
         }
-
-        if (userService.findByNickname(user.getNickname()).isPresent() || userService.findByEmail(user.getEmail()).isPresent()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body("El usuario ya existe");
+    
+        if (userService.findByNickname(user.getNickname()).isPresent()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("El nickname ya está en uso");
         }
-
+    
+        if (userService.findByEmail(user.getEmail()).isPresent()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("El email ya está en uso");
+        }
         String passRegex = "^(?=.*[A-Z])(?=.*[0-9]).{9,}$"; 
         if (!user.getPassword().matches(passRegex)) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("La contraseña debe contener al menos 9 caracteres, una letra mayúscula y un número");  
         }
-        System.out.println("Email: " + user.getEmail()+ " ends with ugr.es: " + user.getEmail().endsWith("@ugr.es")+ " ends with correo.ugr.es: " + user.getEmail().endsWith("@correo.ugr.es"));
+    
+        System.out.println("Email: " + user.getEmail() + " ends with ugr.es: " + user.getEmail().endsWith("@ugr.es") + " ends with correo.ugr.es: " + user.getEmail().endsWith("@correo.ugr.es"));
         if (!user.getEmail().endsWith("@ugr.es") && !user.getEmail().endsWith("@correo.ugr.es")) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("EL correo electrónico debe terminar en @ugr.es o @correo.ugr.es");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("El correo electrónico debe terminar en @ugr.es o @correo.ugr.es");
         }
-
+    
         User savedUser = userService.registerUser(user);
-
-        return new ResponseEntity<>(savedUser, HttpStatus.CREATED); 
+        UserDTO userDTO = UserMapper.toDTO(savedUser);
+    
+        return new ResponseEntity<>(userDTO, HttpStatus.CREATED); 
     }
 
-    @GetMapping("/activate")
+    @PostMapping("/activate") // This endpont is used by email-service to activate the user
     public ResponseEntity<?> activateUser(@RequestParam String token){
         
         Optional<User> user = userService.activateUser(token);
         if (!user.isPresent()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado o token inválido");
         }else{
             //TODO: Redirect to login page
-            return new ResponseEntity<>(user.get(), HttpStatus.OK);
+            UserDTO userDTO = UserMapper.toDTO(user.get());
+            return new ResponseEntity<>(userDTO, HttpStatus.OK);
         }
     }
 
     @PostMapping("/deactivate/{id}")
-    public ResponseEntity<?> deactivateUser(@PathVariable Long id, @RequestBody ChangePasswordRequest changePasswordRequest,
+    public ResponseEntity<?> deactivateUser(@PathVariable Long id, @RequestBody ChangePasswordRequestDTO changePasswordRequest,
                                             @RequestHeader("X-User-ID") String userIdHeader,
                                             @RequestHeader("X-User-Role") String userRoleHeader){
 
@@ -113,14 +124,15 @@ public class UserController {
 
         Optional<User> user = userService.deactivateUser(id, changePasswordRequest.getCurrentPassword());
         if (!user.isPresent()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado o contraseña no coincidente");
 
         }else{
-            return new ResponseEntity<>(user.get(), HttpStatus.OK);
+            UserDTO userDTO = UserMapper.toDTO(user.get());
+            return new ResponseEntity<>(userDTO, HttpStatus.OK);
         }
     }
 
-    @PutMapping("/updateNickname/{id}")
+    @PutMapping("/update-nickname/{id}")
     public ResponseEntity<?> updateNickname(@PathVariable Long id, @RequestBody User user,
                                             @RequestHeader("X-User-ID") String userIdHeader,
                                             @RequestHeader("X-User-Role") String userRoleHeader){
@@ -134,10 +146,13 @@ public class UserController {
         if (!userService.findById(id).isPresent()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
         }
-        return ResponseEntity.ok(userService.updateNickname(id, user));
+
+        User userUpdated = userService.updateNickname(id, user);
+        UserDTO userDTO = UserMapper.toDTO(userUpdated);
+        return new ResponseEntity<>(userDTO, HttpStatus.OK);
     }
 
-    @GetMapping("/changeRole/{id}")
+    @PutMapping("/change-role/{id}")
     public ResponseEntity<?> changeRole(@PathVariable Long id,
                                         @RequestHeader("X-User-ID") String userIdHeader,
                                         @RequestHeader("X-User-Role") String userRoleHeader){
@@ -152,12 +167,13 @@ public class UserController {
         if (!user.isPresent()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
         }else{
-            return new ResponseEntity<>(user.get(), HttpStatus.OK);
+            UserDTO userDTO = UserMapper.toDTO(user.get());
+            return new ResponseEntity<>(userDTO, HttpStatus.OK);
         }
     }
 
-    @PutMapping("/changePassword/{id}")
-    public ResponseEntity<?> changePassword(@PathVariable Long id, @RequestBody ChangePasswordRequest changePasswordRequest,
+    @PutMapping("/change-password/{id}")
+    public ResponseEntity<?> changePassword(@PathVariable Long id, @RequestBody ChangePasswordRequestDTO changePasswordRequest,
                                             @RequestHeader("X-User-ID") String userIdHeader,
                                             @RequestHeader("X-User-Role") String userRoleHeader){
 
@@ -174,15 +190,62 @@ public class UserController {
         
         Optional<User> user = userService.changePassword(id, changePasswordRequest);
         if (!user.isPresent()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado o contraseña no coincidente");
         }else{
-            return new ResponseEntity<>(user.get(), HttpStatus.OK);
+            UserDTO userDTO = UserMapper.toDTO(user.get());
+            return new ResponseEntity<>(userDTO, HttpStatus.OK);
         }
     }
 
-    // ADMIN Endpoints
+    @PutMapping("/activate-notifications/{id}")
+    public ResponseEntity<?> activateNotifications(@PathVariable Long id,
+                                                    @RequestHeader("X-User-ID") String userIdHeader,
+                                                    @RequestHeader("X-User-Role") String userRoleHeader){
 
-    @PostMapping("/crearAdmin")
+        ResponseEntity<String> authResponse = authenticateRequest(id ,userIdHeader,userRoleHeader);
+
+        if (authResponse != null) {
+            return authResponse;
+        }
+
+        Optional<User> user = userService.activateNotifications(id);
+        if (!user.isPresent()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
+        }else{
+            UserDTO userDTO = UserMapper.toDTO(user.get());
+            return new ResponseEntity<>(userDTO, HttpStatus.OK);
+        }
+    }
+
+    @PutMapping("/deactivate-notifications/{id}")
+    public ResponseEntity<?> deactivateNotifications(@PathVariable Long id,
+                                                    @RequestHeader("X-User-ID") String userIdHeader,
+                                                    @RequestHeader("X-User-Role") String userRoleHeader){
+
+        ResponseEntity<String> authResponse = authenticateRequest(id ,userIdHeader,userRoleHeader);
+
+        if (authResponse != null) {
+            return authResponse;
+        }
+
+        Optional<User> user = userService.deactivateNotifications(id);
+        if (!user.isPresent()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
+        }else{
+            UserDTO userDTO = UserMapper.toDTO(user.get());
+            return new ResponseEntity<>(userDTO, HttpStatus.OK);
+        }
+    }
+
+    @PostMapping("/get-emails") // ENdpoint used by academic-subscription-service to notify certain users
+    public ResponseEntity<?> getEmails(@RequestBody List<Long> ids) {
+        List<String> emails = userService.getEmailsWhereNotifications(ids);
+        return ResponseEntity.ok(emails);
+    }
+
+    // ADMIN Endpoints - Without DTOs
+
+    @PostMapping("/crear-admin")
     public ResponseEntity<?> createUser(@RequestBody User user) {
         if (userService.findByNickname(user.getNickname()).isPresent() || userService.findByEmail(user.getEmail()).isPresent()) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("El usuario ya existe");
@@ -190,7 +253,7 @@ public class UserController {
         return ResponseEntity.ok(userService.save(user));
     }
 
-    @PutMapping("actualizarAdmin/{id}")
+    @PutMapping("actualizar-admin/{id}")
     public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody User user) {
         if (!userService.findById(id).isPresent()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
@@ -198,7 +261,7 @@ public class UserController {
         return ResponseEntity.ok(userService.update(id, user));
     }
 
-    @DeleteMapping("borrarAdmin/{id}")
+    @DeleteMapping("borrar-admin/{id}")
     public ResponseEntity<?> deleteUser(@PathVariable Long id) {
         if (!userService.findById(id).isPresent()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
