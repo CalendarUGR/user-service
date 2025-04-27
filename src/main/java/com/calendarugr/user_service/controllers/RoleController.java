@@ -22,12 +22,12 @@ public class RoleController {
     @Autowired
     private RoleService roleService;
 
-    @GetMapping("/role-all")
+    @GetMapping("/roles/all")
     public ResponseEntity<Iterable<Role>> getAllRoles() {
         return ResponseEntity.ok(roleService.findAll());
     }
 
-    @PostMapping("/role-create")
+    @PostMapping("/roles/create")
     public ResponseEntity<?> createRole(@RequestBody Role role) {
         if (roleService.findByName(role.getName()).isPresent()) {
             return new ResponseEntity<>(HttpStatus.CONFLICT);
@@ -35,7 +35,7 @@ public class RoleController {
         return ResponseEntity.ok(roleService.save(role));
     }
 
-    @DeleteMapping("/role-delete")
+    @DeleteMapping("/roles/delete")
     public ResponseEntity<?> deleteRole(@RequestBody Role role) {
         Optional<Role> roleToDelete = roleService.findByName(role.getName());
         if (roleToDelete.isPresent()) {

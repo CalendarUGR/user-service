@@ -220,7 +220,6 @@ public class UserService {
         
         List<User> users = userRepository.findAllByIdAndNotificationTrue(ids);
         List<String> emails = users.stream().map(User::getEmail).toList();
-        System.out.println("Emails: " + emails);
         return emails;
     }
 

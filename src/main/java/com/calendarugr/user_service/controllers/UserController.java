@@ -132,7 +132,7 @@ public class UserController {
         }
     }
 
-    @PutMapping("/update-nickname/{id}")
+    @PutMapping("/nickname/{id}")
     public ResponseEntity<?> updateNickname(@PathVariable Long id, @RequestBody User user,
                                             @RequestHeader("X-User-ID") String userIdHeader,
                                             @RequestHeader("X-User-Role") String userRoleHeader){
@@ -152,7 +152,7 @@ public class UserController {
         return new ResponseEntity<>(userDTO, HttpStatus.OK);
     }
 
-    @PutMapping("/change-role/{id}")
+    @PutMapping("/role/{id}")
     public ResponseEntity<?> changeRole(@PathVariable Long id,
                                         @RequestHeader("X-User-ID") String userIdHeader,
                                         @RequestHeader("X-User-Role") String userRoleHeader){
@@ -172,7 +172,7 @@ public class UserController {
         }
     }
 
-    @PutMapping("/change-password/{id}")
+    @PutMapping("/password/{id}")
     public ResponseEntity<?> changePassword(@PathVariable Long id, @RequestBody ChangePasswordRequestDTO changePasswordRequest,
                                             @RequestHeader("X-User-ID") String userIdHeader,
                                             @RequestHeader("X-User-Role") String userRoleHeader){
@@ -237,7 +237,7 @@ public class UserController {
         }
     }
 
-    @PostMapping("/get-emails") // ENdpoint used by academic-subscription-service to notify certain users
+    @PostMapping("/email-list") // ENdpoint used by academic-subscription-service to notify certain users
     public ResponseEntity<?> getEmails(@RequestBody List<Long> ids) {
         List<String> emails = userService.getEmailsWhereNotifications(ids);
         return ResponseEntity.ok(emails);
@@ -245,7 +245,7 @@ public class UserController {
 
     // ADMIN Endpoints - Without DTOs
 
-    @PostMapping("/crear-admin")
+    @PostMapping("admin/register")
     public ResponseEntity<?> createUser(@RequestBody User user) {
         if (userService.findByNickname(user.getNickname()).isPresent() || userService.findByEmail(user.getEmail()).isPresent()) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("El usuario ya existe");
@@ -253,7 +253,7 @@ public class UserController {
         return ResponseEntity.ok(userService.save(user));
     }
 
-    @PutMapping("actualizar-admin/{id}")
+    @PutMapping("admin/update/{id}")
     public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody User user) {
         if (!userService.findById(id).isPresent()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
@@ -261,7 +261,7 @@ public class UserController {
         return ResponseEntity.ok(userService.update(id, user));
     }
 
-    @DeleteMapping("borrar-admin/{id}")
+    @DeleteMapping("admin/delete/{id}")
     public ResponseEntity<?> deleteUser(@PathVariable Long id) {
         if (!userService.findById(id).isPresent()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");

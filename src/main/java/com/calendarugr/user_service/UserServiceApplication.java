@@ -19,6 +19,10 @@ public class UserServiceApplication {
 		System.setProperty("DB_URL", dotenv.get("DB_URL"));
 		System.setProperty("API_KEY", dotenv.get("API_KEY"));
 		System.setProperty("EUREKA_URL", dotenv.get("EUREKA_URL"));
+		System.setProperty("RABBITMQ_HOST", dotenv.get("RABBITMQ_HOST"));
+		System.setProperty("RABBITMQ_PORT", dotenv.get("RABBITMQ_PORT"));
+		System.setProperty("RABBITMQ_USERNAME", dotenv.get("RABBITMQ_USERNAME"));
+		System.setProperty("RABBITMQ_PASSWORD", dotenv.get("RABBITMQ_PASSWORD"));
 		SpringApplication.run(UserServiceApplication.class, args);
 	}
 
