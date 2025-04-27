@@ -98,7 +98,7 @@ public class UserController {
         return new ResponseEntity<>(userDTO, HttpStatus.CREATED); 
     }
 
-    @PostMapping("/activate") // This endpont is used by email-service to activate the user
+    @GetMapping("/activate") // This endpont is used by email-service to activate the user
     public ResponseEntity<?> activateUser(@RequestParam String token){
         
         Optional<User> user = userService.activateUser(token);
