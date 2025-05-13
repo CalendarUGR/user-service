@@ -62,10 +62,12 @@ public class UserService {
     //  The method to register a user if you are not an admin
     @Transactional
     public User registerUser(User user) {
+
         Optional<Role> roleOptional = roleRepository.findByName("ROLE_INACTIVE");
         if (roleOptional.isPresent()) {
             user.setRole(roleOptional.get());
         }
+
         user.setPassword(PasswordUtil.encryptPassword(user.getPassword()));
         User toReturn = userRepository.save(user);
         // Generate an activation token for the email and save it in the database
@@ -127,6 +129,9 @@ public class UserService {
         if (user.isPresent()) {
             if (PasswordUtil.matches(currentPassword, user.get().getPassword())) {
                 user.get().setRole(roleRepository.findByName("ROLE_INACTIVE").get());
+                user.get().setEmail("");
+                user.get().setNickname("");
+                user.get().setPassword("");
                 userRepository.save(user.get());
                 return user;
             }else{

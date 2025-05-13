@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.calendarugr.user_service.config.PasswordUtil;
 import com.calendarugr.user_service.dtos.ChangePasswordRequestDTO;
 import com.calendarugr.user_service.dtos.UserDTO;
 import com.calendarugr.user_service.entities.User;
@@ -31,15 +32,6 @@ public class UserController {
 
     @Autowired
     private UserService userService;
-
-    // Auxiliary method to check if the user is not trying to modify another user's data
-    private ResponseEntity<String> authenticateRequest(Long userId, String userIdHeader, String userRoleHeader) {
-        System.out.println("User ID: " + userId + " User ID Header: " + userIdHeader + " User Role Header: " + userRoleHeader);
-        if (!userId.equals(Long.parseLong(userIdHeader)) && !userRoleHeader.equals("ROLE_ADMIN")) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("No está autorizado para modificar este usuario");
-        }
-        return null; // Null means the request is authenticated
-    }
 
     @GetMapping("/all")
     public ResponseEntity<List<UserDTO>> getAllUsers() {
@@ -69,12 +61,25 @@ public class UserController {
         }
     }
 
+    @GetMapping("/user-info")
+    public ResponseEntity<?> getUserInfo(@RequestHeader("X-User-ID") String userIdHeader,
+                                         @RequestHeader("X-User-Role") String userRoleHeader) {
+        Long userId = Long.parseLong(userIdHeader);
+        Optional<User> user = userService.findById(userId);
+        if (!user.isPresent()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
+        }else{
+            UserDTO userDTO = UserMapper.toDTO(user.get());
+            return new ResponseEntity<>(userDTO, HttpStatus.OK);
+        }
+    }
+
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@Valid @RequestBody User user) {
         if (user == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("La información del usuario está incompleta");
         }
-    
+
         if (userService.findByNickname(user.getNickname()).isPresent()) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("El nickname ya está en uso");
         }
@@ -105,22 +110,17 @@ public class UserController {
         if (!user.isPresent()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado o token inválido");
         }else{
-            //TODO: Redirect to login page
             UserDTO userDTO = UserMapper.toDTO(user.get());
             return new ResponseEntity<>(userDTO, HttpStatus.OK);
         }
     }
 
-    @PostMapping("/deactivate/{id}")
-    public ResponseEntity<?> deactivateUser(@PathVariable Long id, @RequestBody ChangePasswordRequestDTO changePasswordRequest,
+    @PutMapping("/deactivate")
+    public ResponseEntity<?> deactivateUser(@RequestBody ChangePasswordRequestDTO changePasswordRequest,
                                             @RequestHeader("X-User-ID") String userIdHeader,
                                             @RequestHeader("X-User-Role") String userRoleHeader){
 
-        ResponseEntity<String> authResponse = authenticateRequest(id,userIdHeader,userRoleHeader);
-
-        if (authResponse != null) {
-            return authResponse;
-        }
+        Long id = Long.parseLong(userIdHeader);
 
         Optional<User> user = userService.deactivateUser(id, changePasswordRequest.getCurrentPassword());
         if (!user.isPresent()) {
@@ -132,17 +132,13 @@ public class UserController {
         }
     }
 
-    @PutMapping("/nickname/{id}")
-    public ResponseEntity<?> updateNickname(@PathVariable Long id, @RequestBody User user,
+    @PutMapping("/nickname")
+    public ResponseEntity<?> updateNickname(@RequestBody User user,
                                             @RequestHeader("X-User-ID") String userIdHeader,
                                             @RequestHeader("X-User-Role") String userRoleHeader){
 
-        ResponseEntity<String> authResponse = authenticateRequest(id ,userIdHeader,userRoleHeader);
+        Long id = Long.parseLong(userIdHeader);
 
-        if (authResponse != null) {
-            return authResponse;
-        }
-        
         if (!userService.findById(id).isPresent()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
         }
@@ -152,17 +148,12 @@ public class UserController {
         return new ResponseEntity<>(userDTO, HttpStatus.OK);
     }
 
-    @PutMapping("/role/{id}")
-    public ResponseEntity<?> changeRole(@PathVariable Long id,
-                                        @RequestHeader("X-User-ID") String userIdHeader,
+    @PutMapping("/role")
+    public ResponseEntity<?> changeRole(@RequestHeader("X-User-ID") String userIdHeader,
                                         @RequestHeader("X-User-Role") String userRoleHeader){
 
-        ResponseEntity<String> authResponse = authenticateRequest(id ,userIdHeader,userRoleHeader);
+        Long id = Long.parseLong(userIdHeader);
 
-        if (authResponse != null) {
-            return authResponse;
-        }
-        
         Optional<User> user = userService.changeRole(id);
         if (!user.isPresent()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Usuario no encontrado");
@@ -172,18 +163,14 @@ public class UserController {
         }
     }
 
-    @PutMapping("/password/{id}")
-    public ResponseEntity<?> changePassword(@PathVariable Long id, @RequestBody ChangePasswordRequestDTO changePasswordRequest,
+    @PutMapping("/password")
+    public ResponseEntity<?> changePassword(@RequestBody ChangePasswordRequestDTO changePasswordRequest,
                                             @RequestHeader("X-User-ID") String userIdHeader,
                                             @RequestHeader("X-User-Role") String userRoleHeader){
 
-        ResponseEntity<String> authResponse = authenticateRequest(id ,userIdHeader,userRoleHeader);
+        Long id = Long.parseLong(userIdHeader);
 
-        if (authResponse != null) {
-            return authResponse;
-        }
-
-        String passRegex = "^(?=.*[A-Z])(?=.*[0-9]).{9,}$"; 
+        String passRegex = "^(?=.*[A-Z])(?=.*[0-9]).{9,}$"; // The password requires at least 9 characters, one uppercase letter and one number
         if (!changePasswordRequest.getNewPassword().matches(passRegex)) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("La contraseña debe contener al menos 9 caracteres, una letra mayúscula y un número");   
         }
@@ -197,16 +184,11 @@ public class UserController {
         }
     }
 
-    @PutMapping("/activate-notifications/{id}")
-    public ResponseEntity<?> activateNotifications(@PathVariable Long id,
-                                                    @RequestHeader("X-User-ID") String userIdHeader,
+    @PutMapping("/activate-notifications")
+    public ResponseEntity<?> activateNotifications(@RequestHeader("X-User-ID") String userIdHeader,
                                                     @RequestHeader("X-User-Role") String userRoleHeader){
 
-        ResponseEntity<String> authResponse = authenticateRequest(id ,userIdHeader,userRoleHeader);
-
-        if (authResponse != null) {
-            return authResponse;
-        }
+        Long id = Long.parseLong(userIdHeader);
 
         Optional<User> user = userService.activateNotifications(id);
         if (!user.isPresent()) {
@@ -217,16 +199,10 @@ public class UserController {
         }
     }
 
-    @PutMapping("/deactivate-notifications/{id}")
-    public ResponseEntity<?> deactivateNotifications(@PathVariable Long id,
-                                                    @RequestHeader("X-User-ID") String userIdHeader,
+    @PutMapping("/deactivate-notifications")
+    public ResponseEntity<?> deactivateNotifications(@RequestHeader("X-User-ID") String userIdHeader,
                                                     @RequestHeader("X-User-Role") String userRoleHeader){
-
-        ResponseEntity<String> authResponse = authenticateRequest(id ,userIdHeader,userRoleHeader);
-
-        if (authResponse != null) {
-            return authResponse;
-        }
+        Long id = Long.parseLong(userIdHeader);
 
         Optional<User> user = userService.deactivateNotifications(id);
         if (!user.isPresent()) {
