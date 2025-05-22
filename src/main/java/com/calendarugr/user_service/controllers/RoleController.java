@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.calendarugr.user_service.entities.Role;
 import com.calendarugr.user_service.services.RoleService;
+import com.calendarugr.user_service.dtos.ErrorResponseDTO;
 
 @RestController
 @RequestMapping("/user")
@@ -30,7 +31,8 @@ public class RoleController {
     @PostMapping("/roles/create")
     public ResponseEntity<?> createRole(@RequestBody Role role) {
         if (roleService.findByName(role.getName()).isPresent()) {
-            return new ResponseEntity<>(HttpStatus.CONFLICT);
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponseDTO("Conflict", "El rol ya existe"));
         }
         return ResponseEntity.ok(roleService.save(role));
     }
@@ -41,10 +43,9 @@ public class RoleController {
         if (roleToDelete.isPresent()) {
             Long id = roleToDelete.get().getId();
             roleService.delete(id);
-            return new ResponseEntity<>(HttpStatus.OK);
+            return ResponseEntity.ok().body(new ErrorResponseDTO("Success", "Rol eliminado correctamente"));
         }
-        
-        return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+            .body(new ErrorResponseDTO("NotFound", "Rol no encontrado"));
     }
-
 }
