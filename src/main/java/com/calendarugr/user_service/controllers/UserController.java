@@ -126,7 +126,7 @@ public class UserController {
     @PutMapping("/deactivate")
     public ResponseEntity<?> deactivateUser(@RequestBody ChangePasswordRequestDTO changePasswordRequest,
                                             @RequestHeader("X-User-ID") String userIdHeader,
-                                            @RequestHeader("X-User-Role") String userRoleHeader){
+                                            @RequestHeader("X-User-Role") String userRoleHeader) throws Exception{
 
         Long id = Long.parseLong(userIdHeader);
 

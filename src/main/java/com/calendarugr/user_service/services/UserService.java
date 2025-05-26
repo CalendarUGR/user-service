@@ -31,6 +31,9 @@ import jakarta.validation.ConstraintViolationException;
 @Service
 public class UserService {
 
+    //Logger
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(UserService.class);
+
     @Autowired
     private UserRepository userRepository;
 
@@ -124,21 +127,26 @@ public class UserService {
     }
 
     @Transactional
-    public Optional<User> deactivateUser(Long id, String currentPassword){
-        Optional<User> user = userRepository.findById(id);
-        if (user.isPresent()) {
-            if (PasswordUtil.matches(currentPassword, user.get().getPassword())) {
-                user.get().setRole(roleRepository.findByName("ROLE_INACTIVE").get());
-                user.get().setEmail("");
-                user.get().setNickname("");
-                user.get().setPassword("");
-                userRepository.save(user.get());
-                return user;
+    public Optional<User> deactivateUser(Long id, String currentPassword) throws Exception{
+        try{
+            Optional<User> user = userRepository.findById(id);
+            if (user.isPresent()) {
+                if (PasswordUtil.matches(currentPassword, user.get().getPassword())) {
+                    user.get().setRole(roleRepository.findByName("ROLE_INACTIVE").get());
+                    user.get().setEmail(null);
+                    user.get().setNickname(null);
+                    user.get().setPassword(null);
+                    userRepository.save(user.get());
+                    return user;
+                }else{
+                    return Optional.empty();
+                }
             }else{
                 return Optional.empty();
             }
-        }else{
-            return Optional.empty();
+        } catch (Exception e) {
+            logger.error("Error al desactivar el usuario: " + e.getMessage());
+            throw new Exception("Error al desactivar el usuario", e);
         }
     }
 
