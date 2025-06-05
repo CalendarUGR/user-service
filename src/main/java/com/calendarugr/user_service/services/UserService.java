@@ -86,6 +86,7 @@ public class UserService {
         Map<String, String> message = new HashMap<>();
         message.put("email", user.getEmail());
         message.put("token", token);
+        message.put("type", "activation");
 
         try {
             // Convert map to json
@@ -106,6 +107,74 @@ public class UserService {
         }
 
         return toReturn;
+    }
+
+    @Transactional
+    public void sendResetPasswordEmail(User user) {
+        Optional<TemporaryToken> tokenOp = temporaryTokenRepository.findByNickname(user.getNickname());
+        String token = "";
+
+        if (tokenOp.isEmpty()) {
+            // Generate a reset password token
+            token = UUID.randomUUID().toString();
+            TemporaryToken temporaryToken = new TemporaryToken();
+            temporaryToken.setToken(token);
+            temporaryToken.setNickname(user.getNickname());
+            temporaryToken.setUser(user);
+
+            temporaryTokenRepository.save(temporaryToken);
+        }else{
+            // If the user already has a token, we delete it and create a new one
+            TemporaryToken temporaryToken = tokenOp.get();
+            token = UUID.randomUUID().toString();
+            temporaryToken.setToken(token);
+            temporaryToken.setNickname(user.getNickname());
+            temporaryToken.setUser(user);
+
+            temporaryTokenRepository.save(temporaryToken);
+        }
+
+        // Send email to user through RabbitMQ
+        Map<String, String> message = new HashMap<>();
+        message.put("email", user.getEmail());
+        message.put("token", token);
+        message.put("type", "resetPassword");
+
+        try {
+            // Convert map to json
+            ObjectMapper objectMapper = new ObjectMapper();
+            String json = objectMapper.writeValueAsString(message);
+
+            // Send message
+            Message msg = MessageBuilder.withBody(json.getBytes())
+                .setContentType("application/json")
+                .build();
+
+            rabbitTemplate.convertAndSend(RabbitMQConfig.MAIL_EXCHANGE, RabbitMQConfig.MAIL_ROUTING_KEY, msg);
+
+        } catch (JsonProcessingException e) {
+            // Manejar la excepción aquí
+            e.printStackTrace();
+            throw new RuntimeException("Error processing JSON", e);
+        }
+    }
+
+    @Transactional
+    public Optional<User> resetPassword(String token, String newPassword) {
+        Optional<TemporaryToken> temporaryToken = temporaryTokenRepository.findByToken(token);
+        if (temporaryToken.isPresent()) {
+            Optional<User> user = userRepository.findByNickname(temporaryToken.get().getNickname());
+            if (user.isPresent()) {
+                user.get().setPassword(PasswordUtil.encryptPassword(newPassword));
+                userRepository.save(user.get());
+                temporaryTokenRepository.delete(temporaryToken.get());
+                return user;
+            }else{
+                return Optional.empty();
+            }
+        }else{
+            return Optional.empty();
+        }
     }
 
     @Transactional
@@ -276,6 +345,7 @@ public class UserService {
                 userToUpdate.setEmail(user.getEmail());
             }
             if (user.getPassword() != null){
+                logger.info("Updating password for user with id: " + id);
                 userToUpdate.setPassword(PasswordUtil.encryptPassword(user.getPassword()));
             }
             if (user.getRole() != null){
@@ -286,7 +356,7 @@ public class UserService {
                     throw new ConstraintViolationException("Rol no encontrado", null);
                 }
             }
-            
+            logger.info("Updating user with id: " + id);
             return userRepository.save(userToUpdate);
         }
         return null;

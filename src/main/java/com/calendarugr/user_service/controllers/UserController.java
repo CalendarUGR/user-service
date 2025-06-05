@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.calendarugr.user_service.config.PasswordUtil;
 import com.calendarugr.user_service.dtos.ChangePasswordRequestDTO;
+import com.calendarugr.user_service.dtos.EmailDTO;
 import com.calendarugr.user_service.dtos.UserDTO;
 import com.calendarugr.user_service.dtos.ErrorResponseDTO;
 import com.calendarugr.user_service.entities.User;
@@ -33,6 +34,8 @@ public class UserController {
 
     @Autowired
     private UserService userService;
+
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(UserController.class);
 
     @GetMapping("/all")
     public ResponseEntity<List<UserDTO>> getAllUsers() {
@@ -109,6 +112,52 @@ public class UserController {
         UserDTO userDTO = UserMapper.toDTO(savedUser);
     
         return new ResponseEntity<>(userDTO, HttpStatus.CREATED); 
+    }
+
+    @PostMapping("/reset-pass-mail")
+    public ResponseEntity<?> resetPasswordMail(@RequestBody EmailDTO emailDTO) {
+        String email = emailDTO.getEmail();
+        if (email == null || email.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponseDTO("BadRequest", "El correo electrónico no puede estar vacío"));
+        }
+
+        Optional<User> user = userService.findByEmail(email);
+        if (!user.isPresent()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponseDTO("NotFound", "Usuario no encontrado"));
+        }
+
+        userService.sendResetPasswordEmail(user.get());
+        return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@RequestBody ChangePasswordRequestDTO changePasswordRequest) {
+        String token = changePasswordRequest.getToken();
+        String newPassword = changePasswordRequest.getNewPassword();
+        String currentPassword = changePasswordRequest.getCurrentPassword();
+
+        if (token == null || token.isEmpty() || newPassword == null || newPassword.isEmpty()
+            || currentPassword == null || currentPassword.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponseDTO("BadRequest", "Token y nueva contraseña son obligatorios"));
+        }
+
+        String passRegex = "^(?=.*[A-Z])(?=.*[0-9]).{9,}$";
+        if (!newPassword.matches(passRegex)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponseDTO("BadRequest", "La contraseña debe contener al menos 9 caracteres, una letra mayúscula y un número"));
+        }
+
+        Optional<User> user = userService.resetPassword(token, newPassword);
+        if (!user.isPresent()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponseDTO("NotFound", "Usuario no encontrado o token inválido"));
+        } else {
+            UserDTO userDTO = UserMapper.toDTO(user.get());
+            return new ResponseEntity<>(userDTO, HttpStatus.OK);
+        }
     }
 
     @GetMapping("/activate")
